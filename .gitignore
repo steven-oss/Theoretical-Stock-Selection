@@ -15,7 +15,9 @@ __pycache__/
 .idea/
 
 # 資料（可再產生）
+data/
 *.csv
+!data/.gitkeep
 
 # Python 打包 / 測試產物
 *.egg-info/

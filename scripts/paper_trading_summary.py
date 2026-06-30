@@ -2,20 +2,19 @@
 """紙交易摘要：讀取 paper_trading/ 下的 CSV，計算混合配置淨值（預設 70/30）。
 
 用法：
-  python paper_trading_summary.py
-  python paper_trading_summary.py --as-of 2026-06-27
+  python scripts/paper_trading_summary.py
+  python scripts/paper_trading_summary.py --as-of 2026-06-27
 """
 
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parent
-PAPER_DIR = ROOT / "paper_trading"
-STOCK_CSV = ROOT / "TSMC_stock_data.csv"
+from project_paths import DATA_DIR, PAPER_DIR, ROOT
+
+STOCK_CSV = DATA_DIR / "TSMC_stock_data.csv"
 MARKET_ID = "0050"
 
 
