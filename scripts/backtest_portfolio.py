@@ -11,8 +11,8 @@ MIN_COMMISSION = 20.0
 MAX_POSITIONS = 5
 
 DCA_AMOUNT = 5_500
-DCA_0050_WEIGHT = 0.5
-DCA_STRATEGY_WEIGHT = 0.5
+DCA_0050_WEIGHT = 0.6
+DCA_STRATEGY_WEIGHT = 0.4
 DCA_START = pd.Timestamp("2010-01-11")
 DCA_DAY = 11
 
@@ -25,6 +25,54 @@ STRATEGY_DEPLOY_CASH_PCT = 0.40
 # 0050 於 2025-06-18 恢復交易，採 1 拆 4（FinMind 為未還原收盤價）
 SPLIT_0050_EFFECTIVE = pd.Timestamp("2025-06-18")
 SPLIT_0050_RATIO = 4.0
+
+# 出場參數（對齊 paper_trading/settings.csv）
+STOP_LOSS_PCT = 0.08
+TRAILING_STOP_PCT = 0.10
+TRAILING_ACTIVATE_PCT = 0.07  # 持倉最高價浮盈達 7% 才啟用移動停損
+
+
+def evaluate_exit_signals(
+    entry_price: float,
+    close: float,
+    highest_price: float,
+    sell_signal: bool,
+    *,
+    stop_loss_pct: float = STOP_LOSS_PCT,
+    trailing_stop_pct: float = TRAILING_STOP_PCT,
+    trailing_activate_pct: float = TRAILING_ACTIVATE_PCT,
+) -> tuple[bool, bool, bool, bool, str | None]:
+    """評估是否出場。Returns (should_exit, stop_loss, trailing, trend, exit_reason)。"""
+    current_return = close / entry_price - 1
+    peak_return = highest_price / entry_price - 1
+    stop_loss_hit = current_return <= -stop_loss_pct
+    trailing_active = peak_return >= trailing_activate_pct
+    trailing_stop_hit = trailing_active and close < highest_price * (1 - trailing_stop_pct)
+    trend_exit = bool(sell_signal)
+
+    if not (stop_loss_hit or trailing_stop_hit or trend_exit):
+        return False, stop_loss_hit, trailing_stop_hit, trend_exit, None
+
+    if stop_loss_hit:
+        reason = "stop_loss"
+    elif trailing_stop_hit:
+        reason = "trailing_stop"
+    else:
+        reason = "trend_exit"
+    return True, stop_loss_hit, trailing_stop_hit, trend_exit, reason
+
+
+def trailing_stop_price(
+    entry_price: float,
+    highest_price: float,
+    *,
+    trailing_stop_pct: float = TRAILING_STOP_PCT,
+    trailing_activate_pct: float = TRAILING_ACTIVATE_PCT,
+) -> float | None:
+    """移動停損價；未達啟動門檻時回傳 None。"""
+    if highest_price / entry_price - 1 < trailing_activate_pct:
+        return None
+    return highest_price * (1 - trailing_stop_pct)
 
 
 def calc_commission(amount: float) -> float:

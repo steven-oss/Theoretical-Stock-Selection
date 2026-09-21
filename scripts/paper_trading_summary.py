@@ -12,6 +12,7 @@ import argparse
 
 import pandas as pd
 
+from backtest_portfolio import TRAILING_ACTIVATE_PCT
 from project_paths import DATA_DIR, PAPER_DIR, ROOT
 
 STOCK_CSV = DATA_DIR / "TSMC_stock_data.csv"
@@ -166,8 +167,16 @@ def summarize(as_of: str | None = None) -> None:
             if pd.notna(price):
                 high = max(high, price)
             pnl = (mv / cost - 1) if cost and pd.notna(mv) else float("nan")
-            stop_price = float(p["買入價"]) * (1 + float(settings["固定停損"]))
-            trail_price = high * (1 + float(settings["移動停損回撤"]))
+            entry_price = float(p["買入價"])
+            stop_price = entry_price * (1 + float(settings["固定停損"]))
+            activate_pct = float(settings.get("移動停損啟動門檻", TRAILING_ACTIVATE_PCT))
+            trail_pct = abs(float(settings["移動停損回撤"]))
+            peak_ret = high / entry_price - 1 if entry_price else float("nan")
+            trail_price = (
+                high * (1 - trail_pct)
+                if peak_ret >= activate_pct
+                else float("nan")
+            )
             pos_rows.append(
                 {
                     "代碼": code,
@@ -180,6 +189,7 @@ def summarize(as_of: str | None = None) -> None:
                     "最高價": high,
                     "固定停損價": stop_price,
                     "移動停損價": trail_price,
+                    "移停已啟用": peak_ret >= activate_pct,
                 }
             )
             if pd.notna(mv):
@@ -239,8 +249,18 @@ def summarize(as_of: str | None = None) -> None:
         print("【目前持倉】")
         pos_df = pd.DataFrame(pos_rows)
         display = pos_df.copy()
-        for c in ("成本", "現價", "市值", "最高價", "固定停損價", "移動停損價"):
-            display[c] = display[c].map(lambda x: f"{x:,.2f}" if pd.notna(x) else "-")
+        if "移停已啟用" in display.columns:
+            th_label = f"{float(settings.get('移動停損啟動門檻', TRAILING_ACTIVATE_PCT)):.0%}"
+            display["移動停損價"] = pos_df.apply(
+                lambda r: f"{r['移動停損價']:,.2f}"
+                if r["移停已啟用"] and pd.notna(r["移動停損價"])
+                else f"未啟用(<{th_label})",
+                axis=1,
+            )
+            display = display.drop(columns=["移停已啟用"])
+        for c in ("成本", "現價", "市值", "最高價", "固定停損價"):
+            if c in display.columns:
+                display[c] = display[c].map(lambda x: f"{x:,.2f}" if pd.notna(x) else "-")
         display["報酬率"] = pos_df["報酬率"].map(lambda x: fmt_pct(x) if pd.notna(x) else "-")
         print(display.to_string(index=False))
         print()
